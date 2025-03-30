@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -97,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
-      // Create auth user
+      // Create auth user with metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -114,6 +115,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         title: "Account created",
         description: "Please check your email to confirm your account."
       });
+      
+      // Automatically navigate to login page after successful signup
+      navigate('/login');
     } catch (error: any) {
       toast({
         title: "Sign up failed",
