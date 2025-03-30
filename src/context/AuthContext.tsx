@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -102,25 +101,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: userData.fullName,
+          }
+        }
       });
 
       if (error) throw error;
-
-      if (data.user) {
-        // Create profile entry
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: data.user.id,
-              email,
-              full_name: userData.fullName,
-              role: 'Technician', // Default role
-            },
-          ]);
-
-        if (profileError) throw profileError;
-      }
 
       toast({
         title: "Account created",
