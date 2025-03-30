@@ -1,18 +1,10 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { supabase as supabaseClient } from '@/integrations/supabase/client';
 
-// Set default values in case environment variables are not available
-// Using dummy values that indicate configuration is needed
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://missing-url-configure-environment-variables.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'missing-key-configure-environment-variables';
-
-// Still log the error for debugging purposes, but use default values to prevent runtime errors
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-  console.error('Missing Supabase credentials. Please check your environment variables.');
-  console.info('The application will use placeholder values but functionality will be limited.');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// This file is kept for backward compatibility
+// We'll use the auto-generated client from integrations/supabase/client.ts
+export const supabase = supabaseClient;
 
 // Types based on our database schema
 export type ReportStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected';
