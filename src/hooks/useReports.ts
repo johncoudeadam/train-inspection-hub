@@ -37,7 +37,9 @@ export function useReports() {
       }
       
       if (searchParams.status !== 'all') {
-        query = query.eq('status', searchParams.status);
+        // Ensure we're passing a valid ReportStatus enum value
+        const status = searchParams.status as ReportStatus;
+        query = query.eq('status', status);
       }
       
       if (searchParams.subsystem) {
