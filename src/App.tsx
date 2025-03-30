@@ -14,6 +14,7 @@ import MainLayout from "./components/layout/MainLayout";
 // Pages
 import Dashboard from "./pages/Dashboard";
 import Reports from "./pages/Reports";
+import ReportDetail from "./pages/ReportDetail";
 import NewReport from "./pages/NewReport";
 import Analytics from "./pages/Analytics";
 import Projects from "./pages/Projects";
@@ -50,6 +51,7 @@ const AppContent = () => {
       }>
         <Route path="/" element={<Dashboard />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/reports/:id" element={<ReportDetail />} />
         <Route path="/reports/new" element={<NewReport />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/projects" element={<Projects />} />
