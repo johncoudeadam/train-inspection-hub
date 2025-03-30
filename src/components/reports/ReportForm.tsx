@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -22,12 +23,13 @@ import {
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useToast } from "@/components/ui/use-toast";
 import { 
   Upload,
   X,
-  Image as ImageIcon
+  Loader2
 } from 'lucide-react';
+import { useReports } from '@/hooks/useReports';
+import { useProjects } from '@/hooks/useProjects';
 
 // Form schema
 const reportSchema = z.object({
@@ -39,51 +41,41 @@ const reportSchema = z.object({
 
 type ReportFormValues = z.infer<typeof reportSchema>;
 
-const defaultValues: Partial<ReportFormValues> = {
-  trainNumber: "",
-  subsystem: "",
-  location: "",
-  notes: "",
-};
-
 const ReportForm = () => {
+  const navigate = useNavigate();
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([]);
-  const { toast } = useToast();
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { createReport, submitReport, uploadPhoto } = useReports();
+  const { projects, projectsLoading } = useProjects();
+  const { data: subsystems, isLoading: subsystemsLoading } = useProjects().useSubsystems(selectedProjectId);
+  const { data: locations, isLoading: locationsLoading } = useProjects().useLocations(selectedProjectId);
   
   const form = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
-    defaultValues,
+    defaultValues: {
+      trainNumber: "",
+      subsystem: "",
+      location: "",
+      notes: "",
+    },
   });
 
   const handlePhotosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     
     if (photos.length + files.length > 10) {
-      toast({
-        title: "Too many photos",
-        description: "You can upload a maximum of 10 photos per report",
-        variant: "destructive",
-      });
       return;
     }
 
     const validFiles = files.filter(file => {
       if (!file.type.startsWith('image/')) {
-        toast({
-          title: "Invalid file type",
-          description: `${file.name} is not an image file`,
-          variant: "destructive",
-        });
         return false;
       }
       
       if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "File too large",
-          description: `${file.name} exceeds the 5MB limit`,
-          variant: "destructive",
-        });
         return false;
       }
       
@@ -107,20 +99,121 @@ const ReportForm = () => {
     setPhotoPreviewUrls(prev => prev.filter((_, i) => i !== index));
   };
 
-  const onSubmit = (data: ReportFormValues) => {
-    // In a real app, this would send the form data and photos to an API
-    console.log("Form data:", data);
-    console.log("Photos:", photos);
+  const onSubmit = async (data: ReportFormValues) => {
+    try {
+      setIsSubmitting(true);
+      
+      // Create the report
+      const reportResult = await createReport.mutateAsync({
+        trainNumber: data.trainNumber,
+        subsystem: data.subsystem,
+        location: data.location,
+        notes: data.notes,
+      });
+      
+      // Upload photos if any
+      if (photos.length > 0 && reportResult) {
+        await Promise.all(
+          photos.map(photo => 
+            uploadPhoto.mutateAsync({ 
+              reportId: reportResult.id, 
+              file: photo 
+            })
+          )
+        );
+      }
+      
+      // Submit the report for review
+      await submitReport.mutateAsync(reportResult.id);
+      
+      // Navigate back to reports list
+      navigate('/reports');
+      
+    } catch (error) {
+      console.error('Error submitting report:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const handleProjectChange = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    form.setValue('subsystem', '');
+    form.setValue('location', '');
+  };
+  
+  const saveAsDraft = async () => {
+    const isValid = await form.trigger();
+    if (!isValid) return;
     
-    toast({
-      title: "Report submitted",
-      description: "Your report has been saved as a draft",
-    });
+    try {
+      setIsSubmitting(true);
+      
+      // Get form data
+      const data = form.getValues();
+      
+      // Create the report
+      const reportResult = await createReport.mutateAsync({
+        trainNumber: data.trainNumber,
+        subsystem: data.subsystem,
+        location: data.location,
+        notes: data.notes,
+      });
+      
+      // Upload photos if any
+      if (photos.length > 0 && reportResult) {
+        await Promise.all(
+          photos.map(photo => 
+            uploadPhoto.mutateAsync({ 
+              reportId: reportResult.id, 
+              file: photo 
+            })
+          )
+        );
+      }
+      
+      // Navigate back to reports list
+      navigate('/reports');
+      
+    } catch (error) {
+      console.error('Error saving draft:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Project Selection */}
+        <FormItem>
+          <FormLabel>Project</FormLabel>
+          <Select onValueChange={handleProjectChange}>
+            <FormControl>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a project" />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {projectsLoading ? (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Loading...
+                </div>
+              ) : (
+                projects?.map(project => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+          <FormDescription>
+            Select a project to load its subsystems and locations
+          </FormDescription>
+        </FormItem>
+        
         {/* Train Number */}
         <FormField
           control={form.control}
@@ -145,7 +238,8 @@ const ReportForm = () => {
               <FormLabel>Subsystem</FormLabel>
               <Select
                 onValueChange={field.onChange}
-                defaultValue={field.value}
+                value={field.value}
+                disabled={!selectedProjectId}
               >
                 <FormControl>
                   <SelectTrigger>
@@ -153,12 +247,18 @@ const ReportForm = () => {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="brakes">Brakes</SelectItem>
-                  <SelectItem value="engine">Engine</SelectItem>
-                  <SelectItem value="doors">Doors</SelectItem>
-                  <SelectItem value="hvac">HVAC</SelectItem>
-                  <SelectItem value="electrical">Electrical</SelectItem>
-                  <SelectItem value="suspension">Suspension</SelectItem>
+                  {subsystemsLoading ? (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Loading...
+                    </div>
+                  ) : (
+                    subsystems?.map(subsystem => (
+                      <SelectItem key={subsystem.id} value={subsystem.name}>
+                        {subsystem.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -175,7 +275,8 @@ const ReportForm = () => {
               <FormLabel>Location</FormLabel>
               <Select
                 onValueChange={field.onChange}
-                defaultValue={field.value}
+                value={field.value}
+                disabled={!selectedProjectId}
               >
                 <FormControl>
                   <SelectTrigger>
@@ -183,12 +284,18 @@ const ReportForm = () => {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="car1">Car 1</SelectItem>
-                  <SelectItem value="car2">Car 2</SelectItem>
-                  <SelectItem value="car3">Car 3</SelectItem>
-                  <SelectItem value="station1">Station 1</SelectItem>
-                  <SelectItem value="depot">Depot</SelectItem>
-                  <SelectItem value="yard">Yard</SelectItem>
+                  {locationsLoading ? (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Loading...
+                    </div>
+                  ) : (
+                    locations?.map(location => (
+                      <SelectItem key={location.id} value={location.name}>
+                        {location.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -269,8 +376,30 @@ const ReportForm = () => {
         
         {/* Form Actions */}
         <div className="flex justify-between pt-6">
-          <Button type="button" variant="outline">Save as Draft</Button>
-          <Button type="submit">Submit Report</Button>
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={saveAsDraft}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : "Save as Draft"}
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Submitting...
+              </>
+            ) : "Submit Report"}
+          </Button>
         </div>
       </form>
     </Form>

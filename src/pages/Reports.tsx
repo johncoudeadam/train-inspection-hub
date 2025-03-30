@@ -10,83 +10,27 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { PlusCircle, Search, Filter } from 'lucide-react';
+import { PlusCircle, Search, Filter, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-// Mock data for reports
-const mockReports = [
-  {
-    id: "TR2023-001",
-    trainNumber: "A1234",
-    subsystem: "Brakes",
-    location: "Car 1",
-    status: "Approved" as const,
-    createdAt: "2023-06-01",
-    hasPhotos: true
-  },
-  {
-    id: "TR2023-002",
-    trainNumber: "B5678",
-    subsystem: "Engine",
-    location: "Depot",
-    status: "Submitted" as const,
-    createdAt: "2023-06-02",
-    hasPhotos: false
-  },
-  {
-    id: "TR2023-003",
-    trainNumber: "C9012",
-    subsystem: "Doors",
-    location: "Station 1",
-    status: "Draft" as const,
-    createdAt: "2023-06-03",
-    hasPhotos: true
-  },
-  {
-    id: "TR2023-004",
-    trainNumber: "D3456",
-    subsystem: "HVAC",
-    location: "Car 2",
-    status: "Rejected" as const,
-    createdAt: "2023-06-04",
-    hasPhotos: true
-  },
-  {
-    id: "TR2023-005",
-    trainNumber: "E7890",
-    subsystem: "Electrical",
-    location: "Yard",
-    status: "Approved" as const,
-    createdAt: "2023-06-05",
-    hasPhotos: false
-  },
-  {
-    id: "TR2023-006",
-    trainNumber: "F1234",
-    subsystem: "Suspension",
-    location: "Car 3",
-    status: "Submitted" as const,
-    createdAt: "2023-06-06",
-    hasPhotos: true
-  }
-];
+import { useReports } from '@/hooks/useReports';
+import { ReportStatus } from '@/lib/supabase';
 
 const Reports = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const { 
+    reports, 
+    isLoading, 
+    error, 
+    searchParams, 
+    setSearchParams 
+  } = useReports();
   
-  // Filter reports based on search term and status filter
-  const filteredReports = mockReports.filter(report => {
-    const matchesSearch = 
-      report.trainNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      report.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.subsystem.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.location.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === "all" || report.status.toLowerCase() === statusFilter.toLowerCase();
-    
-    return matchesSearch && matchesStatus;
-  });
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchParams(prev => ({ ...prev, trainNumber: e.target.value }));
+  };
+  
+  const handleStatusFilter = (value: string) => {
+    setSearchParams(prev => ({ ...prev, status: value }));
+  };
   
   return (
     <div className="space-y-6">
@@ -107,15 +51,15 @@ const Reports = () => {
           <Input
             placeholder="Search by train number, ID, subsystem..."
             className="pl-9"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchParams.trainNumber}
+            onChange={handleSearch}
           />
         </div>
         <div className="flex gap-2">
           <div className="w-40">
             <Select 
               defaultValue="all" 
-              onValueChange={setStatusFilter}
+              onValueChange={handleStatusFilter}
             >
               <SelectTrigger>
                 <Filter className="h-4 w-4 mr-2" />
@@ -123,24 +67,49 @@ const Reports = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="submitted">Submitted</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="Draft">Draft</SelectItem>
+                <SelectItem value="Submitted">Submitted</SelectItem>
+                <SelectItem value="Approved">Approved</SelectItem>
+                <SelectItem value="Rejected">Rejected</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
       
+      {/* Loading state */}
+      {isLoading && (
+        <div className="text-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="mt-2 text-muted-foreground">Loading reports...</p>
+        </div>
+      )}
+      
+      {/* Error state */}
+      {error && (
+        <div className="text-center py-12 text-destructive">
+          <p>Failed to load reports</p>
+          <p className="text-sm mt-1">{(error as Error).message}</p>
+        </div>
+      )}
+      
       {/* Reports Grid */}
-      {filteredReports.length > 0 ? (
+      {!isLoading && reports && reports.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredReports.map((report) => (
-            <ReportCard key={report.id} {...report} />
+          {reports.map((report) => (
+            <ReportCard 
+              key={report.id} 
+              id={report.id}
+              trainNumber={report.train_number}
+              subsystem={report.subsystem}
+              location={report.location}
+              status={report.status as ReportStatus}
+              createdAt={new Date(report.created_at).toISOString().split('T')[0]}
+              hasPhotos={report.has_photos}
+            />
           ))}
         </div>
-      ) : (
+      ) : !isLoading && (
         <div className="text-center py-12">
           <h3 className="text-lg font-medium">No reports found</h3>
           <p className="text-muted-foreground mt-1">Try changing your search criteria</p>
