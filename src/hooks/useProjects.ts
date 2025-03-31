@@ -4,17 +4,17 @@ import { supabase, Project } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 
-interface ProjectFormData {
+export interface ProjectFormData {
   name: string;
   description?: string;
 }
 
-interface SubsystemFormData {
+export interface SubsystemFormData {
   name: string;
   projectId: string;
 }
 
-interface LocationFormData {
+export interface LocationFormData {
   name: string;
   projectId: string;
 }

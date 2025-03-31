@@ -40,35 +40,39 @@ const Dashboard = () => {
     queryKey: ['report-stats'],
     queryFn: async () => {
       // Get total reports
-      const { count: totalCount, error: totalError } = await supabase
+      const { data: totalData, error: totalError } = await supabase
         .from('reports')
-        .count();
+        .select('id', { count: 'exact', head: true });
       
       if (totalError) throw totalError;
+      const totalCount = totalData?.length !== undefined ? totalData.length : 0;
       
       // Get approved reports
-      const { count: approvedCount, error: approvedError } = await supabase
+      const { data: approvedData, error: approvedError } = await supabase
         .from('reports')
-        .count()
+        .select('id', { count: 'exact', head: true })
         .eq('status', 'Approved');
       
       if (approvedError) throw approvedError;
+      const approvedCount = approvedData?.length !== undefined ? approvedData.length : 0;
       
       // Get reports with issues (using reports that are either rejected or with notes containing certain keywords)
-      const { count: issuesCount, error: issuesError } = await supabase
+      const { data: issuesData, error: issuesError } = await supabase
         .from('reports')
-        .count()
+        .select('id', { count: 'exact', head: true })
         .or('status.eq.Rejected,notes.ilike.%issue%,notes.ilike.%problem%,notes.ilike.%repair%');
       
       if (issuesError) throw issuesError;
+      const issuesCount = issuesData?.length !== undefined ? issuesData.length : 0;
       
       // Get pending reports
-      const { count: pendingCount, error: pendingError } = await supabase
+      const { data: pendingData, error: pendingError } = await supabase
         .from('reports')
-        .count()
+        .select('id', { count: 'exact', head: true })
         .eq('status', 'Submitted');
       
       if (pendingError) throw pendingError;
+      const pendingCount = pendingData?.length !== undefined ? pendingData.length : 0;
       
       return {
         total: totalCount,
@@ -110,14 +114,15 @@ const Dashboard = () => {
       
       // Fetch issue count for each month
       const result = await Promise.all(months.map(async ({ month, startDate, endDate }) => {
-        const { count, error } = await supabase
+        const { data, error } = await supabase
           .from('reports')
-          .count()
+          .select('id', { count: 'exact', head: true })
           .gte('created_at', startDate)
           .lte('created_at', endDate)
           .or('status.eq.Rejected,notes.ilike.%issue%,notes.ilike.%problem%,notes.ilike.%repair%');
           
         if (error) throw error;
+        const count = data?.length !== undefined ? data.length : 0;
         
         return {
           month,

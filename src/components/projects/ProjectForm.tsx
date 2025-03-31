@@ -35,7 +35,11 @@ const ProjectForm: React.FC = () => {
   });
 
   function onSubmit(data: ProjectFormValues) {
-    createProject.mutate(data, {
+    // Ensure name is treated as required for ProjectFormData
+    createProject.mutate({
+      name: data.name,
+      description: data.description || ''
+    }, {
       onSuccess: () => {
         form.reset();
       }
