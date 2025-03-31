@@ -24,9 +24,15 @@ import Signup from "./pages/Signup";
 
 const queryClient = new QueryClient();
 
-// Protected route component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+// Protected route component with role-based access
+const ProtectedRoute = ({ 
+  children, 
+  allowedRoles = [] 
+}: { 
+  children: React.ReactNode, 
+  allowedRoles?: string[] 
+}) => {
+  const { user, loading, userRole } = useAuth();
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -36,10 +42,18 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // If the route requires specific roles, check if the user has one of them
+  if (allowedRoles.length > 0 && !allowedRoles.includes(userRole || '')) {
+    // Redirect to dashboard with unauthorized access
+    return <Navigate to="/" replace />;
+  }
+
   return <>{children}</>;
 };
 
 const AppContent = () => {
+  const { userRole } = useAuth();
+  
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -50,11 +64,24 @@ const AppContent = () => {
         </ProtectedRoute>
       }>
         <Route path="/" element={<Dashboard />} />
+        
+        {/* Reports Routes */}
         <Route path="/reports" element={<Reports />} />
         <Route path="/reports/:id" element={<ReportDetail />} />
-        <Route path="/reports/new" element={<NewReport />} />
+        <Route path="/reports/new" element={
+          <ProtectedRoute allowedRoles={['Technician', 'Admin']}>
+            <NewReport />
+          </ProtectedRoute>
+        } />
+        
         <Route path="/analytics" element={<Analytics />} />
-        <Route path="/projects" element={<Projects />} />
+        
+        {/* Projects Route - Admin Only */}
+        <Route path="/projects" element={
+          <ProtectedRoute>
+            <Projects />
+          </ProtectedRoute>
+        } />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

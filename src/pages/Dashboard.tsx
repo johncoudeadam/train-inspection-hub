@@ -10,8 +10,6 @@ import {
   CheckCircle, 
   AlertTriangle, 
   Clock, 
-  TrendingUp,
-  TrendingDown,
   ChevronRight,
   PlusCircle
 } from 'lucide-react';
@@ -27,97 +25,176 @@ import {
   Bar, 
   Legend 
 } from 'recharts';
-
-// Mock data for dashboard charts
-const issuesTrendData = [
-  { month: 'Jan', issues: 12 },
-  { month: 'Feb', issues: 19 },
-  { month: 'Mar', issues: 15 },
-  { month: 'Apr', issues: 20 },
-  { month: 'May', issues: 18 },
-  { month: 'Jun', issues: 14 }
-];
-
-const subsystemIssuesData = [
-  { name: 'Brakes', issues: 15 },
-  { name: 'Engine', issues: 12 },
-  { name: 'Doors', issues: 8 },
-  { name: 'HVAC', issues: 5 },
-  { name: 'Electrical', issues: 10 },
-  { name: 'Suspension', issues: 7 }
-];
-
-// Mock reports for recent reports list
-const recentReports = [
-  {
-    id: "TR2023-001",
-    trainNumber: "A1234",
-    subsystem: "Brakes",
-    location: "Car 1",
-    status: "Approved" as const,
-    createdAt: "2023-06-01",
-    hasPhotos: true
-  },
-  {
-    id: "TR2023-002",
-    trainNumber: "B5678",
-    subsystem: "Engine",
-    location: "Depot",
-    status: "Submitted" as const,
-    createdAt: "2023-06-02",
-    hasPhotos: false
-  },
-  {
-    id: "TR2023-003",
-    trainNumber: "C9012",
-    subsystem: "Doors",
-    location: "Station 1",
-    status: "Draft" as const,
-    createdAt: "2023-06-03",
-    hasPhotos: true
-  }
-];
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/context/AuthContext';
+import { ReportStatus } from '@/lib/supabase';
+import { format, subMonths } from 'date-fns';
 
 const Dashboard = () => {
+  const { userRole } = useAuth();
+  
+  // Fetch report statistics
+  const { data: reportStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['report-stats'],
+    queryFn: async () => {
+      // Get total reports
+      const { count: totalCount, error: totalError } = await supabase
+        .from('reports')
+        .count();
+      
+      if (totalError) throw totalError;
+      
+      // Get approved reports
+      const { count: approvedCount, error: approvedError } = await supabase
+        .from('reports')
+        .count()
+        .eq('status', 'Approved');
+      
+      if (approvedError) throw approvedError;
+      
+      // Get reports with issues (using reports that are either rejected or with notes containing certain keywords)
+      const { count: issuesCount, error: issuesError } = await supabase
+        .from('reports')
+        .count()
+        .or('status.eq.Rejected,notes.ilike.%issue%,notes.ilike.%problem%,notes.ilike.%repair%');
+      
+      if (issuesError) throw issuesError;
+      
+      // Get pending reports
+      const { count: pendingCount, error: pendingError } = await supabase
+        .from('reports')
+        .count()
+        .eq('status', 'Submitted');
+      
+      if (pendingError) throw pendingError;
+      
+      return {
+        total: totalCount,
+        approved: approvedCount,
+        issues: issuesCount,
+        pending: pendingCount
+      };
+    }
+  });
+  
+  // Fetch recent reports
+  const { data: recentReports, isLoading: reportsLoading } = useQuery({
+    queryKey: ['recent-reports'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(3);
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+  
+  // Fetch issue trends for the line chart
+  const { data: issuesTrend, isLoading: trendLoading } = useQuery({
+    queryKey: ['issues-trend'],
+    queryFn: async () => {
+      // Get the last 6 months
+      const months = Array.from({ length: 6 }, (_, i) => {
+        const date = subMonths(new Date(), i);
+        return {
+          month: format(date, 'MMM'),
+          startDate: new Date(date.getFullYear(), date.getMonth(), 1).toISOString(),
+          endDate: new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString()
+        };
+      }).reverse();
+      
+      // Fetch issue count for each month
+      const result = await Promise.all(months.map(async ({ month, startDate, endDate }) => {
+        const { count, error } = await supabase
+          .from('reports')
+          .count()
+          .gte('created_at', startDate)
+          .lte('created_at', endDate)
+          .or('status.eq.Rejected,notes.ilike.%issue%,notes.ilike.%problem%,notes.ilike.%repair%');
+          
+        if (error) throw error;
+        
+        return {
+          month,
+          issues: count
+        };
+      }));
+      
+      return result;
+    }
+  });
+  
+  // Fetch issues by subsystem for the bar chart
+  const { data: subsystemIssues, isLoading: subsystemLoading } = useQuery({
+    queryKey: ['subsystem-issues'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('subsystem')
+        .or('status.eq.Rejected,notes.ilike.%issue%,notes.ilike.%problem%,notes.ilike.%repair%');
+        
+      if (error) throw error;
+      
+      // Count occurrences of each subsystem
+      const counts: Record<string, number> = {};
+      data.forEach(report => {
+        counts[report.subsystem] = (counts[report.subsystem] || 0) + 1;
+      });
+      
+      // Convert to array format for chart
+      return Object.entries(counts)
+        .map(([name, issues]) => ({ name, issues }))
+        .sort((a, b) => b.issues - a.issues)
+        .slice(0, 6); // Top 6 subsystems
+    }
+  });
+  
+  // Determine if data is loading
+  const isLoading = statsLoading || reportsLoading || trendLoading || subsystemLoading;
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Button asChild>
-          <Link to="/reports/new">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            New Report
-          </Link>
-        </Button>
+        {userRole === 'Technician' && (
+          <Button asChild>
+            <Link to="/reports/new">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              New Report
+            </Link>
+          </Button>
+        )}
       </div>
       
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Total Reports" 
-          value="146"
-          description="Last 30 days" 
+          value={isLoading ? "..." : reportStats?.total.toString() || '0'}
+          description="All time" 
           icon={<FileText />}
-          trend={{ value: 12, isPositive: true }}
         />
         <StatCard 
           title="Approved" 
-          value="98"
-          description="67% approval rate" 
+          value={isLoading ? "..." : reportStats?.approved.toString() || '0'}
+          description={isLoading ? "..." : `${Math.round((reportStats?.approved || 0) / (reportStats?.total || 1) * 100)}% approval rate`} 
           icon={<CheckCircle />}
-          trend={{ value: 5, isPositive: true }}
         />
         <StatCard 
           title="Issues Identified" 
-          value="53"
-          description="32 high priority" 
+          value={isLoading ? "..." : reportStats?.issues.toString() || '0'}
+          description="Needs attention" 
           icon={<AlertTriangle />}
-          trend={{ value: 8, isPositive: false }}
         />
         <StatCard 
           title="Pending Review" 
-          value="15"
-          description="Avg. 2 days wait time" 
+          value={isLoading ? "..." : reportStats?.pending.toString() || '0'}
+          description="Awaiting action" 
           icon={<Clock />}
         />
       </div>
@@ -131,25 +208,31 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={issuesTrendData}
-                  margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="issues" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={2} 
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 8 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {isLoading ? (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={issuesTrend}
+                    margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line 
+                      type="monotone" 
+                      dataKey="issues" 
+                      stroke="hsl(var(--primary))" 
+                      strokeWidth={2} 
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 8 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -161,23 +244,29 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={subsystemIssuesData}
-                  margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar 
-                    dataKey="issues" 
-                    fill="hsl(var(--primary))" 
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {isLoading ? (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={subsystemIssues}
+                    margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar 
+                      dataKey="issues" 
+                      fill="hsl(var(--primary))" 
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -194,11 +283,43 @@ const Dashboard = () => {
             </Link>
           </Button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {recentReports.map((report) => (
-            <ReportCard key={report.id} {...report} />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array(3).fill(0).map((_, i) => (
+              <Card key={i} className="h-64">
+                <CardHeader>
+                  <Skeleton className="h-6 w-40 mb-2" />
+                  <Skeleton className="h-4 w-20" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : recentReports && recentReports.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recentReports.map((report) => (
+              <ReportCard 
+                key={report.id} 
+                id={report.id}
+                trainNumber={report.train_number}
+                subsystem={report.subsystem}
+                location={report.location}
+                status={report.status as ReportStatus}
+                createdAt={new Date(report.created_at).toISOString().split('T')[0]}
+                hasPhotos={report.has_photos || false}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <h3 className="text-lg font-medium">No reports found</h3>
+            <p className="text-muted-foreground mt-1">No reports have been submitted yet</p>
+          </div>
+        )}
       </div>
     </div>
   );

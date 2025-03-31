@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Calendar, Download, Edit, MapPin, FileText, Camera } from 'lucide-react';
+import { ArrowLeft, Calendar, Download, Edit, MapPin, FileText, Camera, CheckCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
@@ -13,16 +13,23 @@ import { Separator } from '@/components/ui/separator';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ReportStatus } from '@/lib/supabase';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import ReportApprovalForm from '@/components/reports/ReportApprovalForm';
+import { useAuth } from '@/context/AuthContext';
+import { useReports } from '@/hooks/useReports';
 
 const ReportDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const { userRole } = useAuth();
+  const { submitReport } = useReports();
 
   // Fetch report details
   const { 
     data: report, 
     isLoading: reportLoading, 
-    error: reportError 
+    error: reportError,
+    refetch: refetchReport
   } = useQuery({
     queryKey: ['report', id],
     queryFn: async () => {
@@ -55,6 +62,21 @@ const ReportDetail = () => {
     enabled: !!report?.has_photos,
   });
 
+  // Submit report for review
+  const handleSubmitReport = () => {
+    if (!id) return;
+    
+    submitReport.mutate(id, {
+      onSuccess: () => {
+        toast({
+          title: "Report submitted",
+          description: "Your report has been submitted for review",
+        });
+        refetchReport();
+      }
+    });
+  };
+
   // Status badge styling
   const getStatusBadgeClass = (status: ReportStatus) => {
     switch (status) {
@@ -70,6 +92,11 @@ const ReportDetail = () => {
         return 'bg-muted text-muted-foreground';
     }
   };
+
+  // Check user permissions
+  const canReview = userRole === 'Manager' && report?.status === 'Submitted';
+  const canSubmit = userRole === 'Technician' && report?.status === 'Draft';
+  const canEdit = userRole === 'Technician' && report?.status === 'Draft';
 
   if (reportLoading) {
     return (
@@ -251,11 +278,44 @@ const ReportDetail = () => {
           </Button>
           
           <div className="flex gap-2">
-            {report.status === 'Draft' && (
-              <Button>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Report
+            {canSubmit && (
+              <Button onClick={handleSubmitReport} disabled={submitReport.isPending}>
+                {submitReport.isPending ? 'Submitting...' : 'Submit for Review'}
               </Button>
+            )}
+            
+            {canEdit && (
+              <Button asChild>
+                <Link to={`/reports/edit/${report.id}`}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit Report
+                </Link>
+              </Button>
+            )}
+            
+            {canReview && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Review Report
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Review Report</DialogTitle>
+                    <DialogDescription>
+                      Approve or reject this report with comments
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ReportApprovalForm 
+                    reportId={id as string} 
+                    onClose={() => {
+                      refetchReport();
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
             )}
             
             <Button variant="secondary">

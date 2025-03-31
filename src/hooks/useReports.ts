@@ -108,6 +108,7 @@ export function useReports() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['report'] });
       toast({
         title: "Report submitted",
         description: "Your report has been submitted for review",
@@ -124,13 +125,43 @@ export function useReports() {
 
   // Update report status (approve/reject)
   const updateReportStatus = useMutation({
-    mutationFn: async ({ reportId, status }: { reportId: string, status: ReportStatus }) => {
+    mutationFn: async ({ 
+      reportId, 
+      status, 
+      comments 
+    }: { 
+      reportId: string, 
+      status: ReportStatus, 
+      comments?: string 
+    }) => {
+      // Prepare update data
+      const updateData: any = { 
+        status,
+        reviewed_by: user?.id 
+      };
+      
+      // If there are comments, append them to existing notes
+      if (comments) {
+        // First, get the current report
+        const { data: currentReport, error: fetchError } = await supabase
+          .from('reports')
+          .select('notes')
+          .eq('id', reportId)
+          .single();
+          
+        if (fetchError) throw fetchError;
+        
+        // Append review comments to notes
+        const reviewNote = `\n\n--- Review Comments (${new Date().toLocaleString()}) ---\n${comments}`;
+        updateData.notes = currentReport.notes 
+          ? currentReport.notes + reviewNote 
+          : reviewNote;
+      }
+      
+      // Update the report
       const { data, error } = await supabase
         .from('reports')
-        .update({ 
-          status,
-          reviewed_by: user?.id 
-        })
+        .update(updateData)
         .eq('id', reportId)
         .select();
         
@@ -139,6 +170,7 @@ export function useReports() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['report'] });
       const action = data.status === 'Approved' ? 'approved' : 'rejected';
       toast({
         title: `Report ${action}`,
@@ -193,6 +225,7 @@ export function useReports() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: ['report-photos'] });
     },
     onError: (error: any) => {
       toast({
