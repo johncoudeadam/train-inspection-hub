@@ -18,6 +18,9 @@ import ReportDetail from "./pages/ReportDetail";
 import NewReport from "./pages/NewReport";
 import Analytics from "./pages/Analytics";
 import Projects from "./pages/Projects";
+import Reviews from "./pages/Reviews";
+import Users from "./pages/Users";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -74,14 +77,31 @@ const AppContent = () => {
           </ProtectedRoute>
         } />
         
+        {/* Reviews Route - Managers Only */}
+        <Route path="/reviews" element={
+          <ProtectedRoute allowedRoles={['Manager', 'Admin']}>
+            <Reviews />
+          </ProtectedRoute>
+        } />
+        
         <Route path="/analytics" element={<Analytics />} />
         
         {/* Projects Route - Admin Only */}
         <Route path="/projects" element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['Admin']}>
             <Projects />
           </ProtectedRoute>
         } />
+        
+        {/* Users Route - Admin Only */}
+        <Route path="/users" element={
+          <ProtectedRoute allowedRoles={['Admin']}>
+            <Users />
+          </ProtectedRoute>
+        } />
+        
+        {/* Settings Route */}
+        <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

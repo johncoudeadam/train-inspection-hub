@@ -11,7 +11,8 @@ import {
   FileText, 
   Users,
   Building,
-  LogOut
+  LogOut,
+  CheckSquare
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
@@ -76,7 +77,7 @@ const Sidebar = ({ userRole = 'Technician', collapsed = false }: SidebarProps) =
             <h2 className={cn("px-3 mb-2 text-xs uppercase text-sidebar-foreground/60", collapsed && "sr-only")}>
               Management
             </h2>
-            <SidebarLink to="/reviews" icon={<FileText />} label="Review Reports" count={5} hideLabel={collapsed} />
+            <SidebarLink to="/reviews" icon={<CheckSquare />} label="Review Reports" count={5} hideLabel={collapsed} />
           </div>
         )}
         
