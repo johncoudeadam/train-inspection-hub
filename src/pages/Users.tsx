@@ -30,13 +30,16 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Link } from 'react-router-dom';
+
+type UserRole = 'Technician' | 'Manager' | 'Admin';
 
 const Users = () => {
   const { userRole } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('All');
+  const [roleFilter, setRoleFilter] = useState<UserRole | 'All'>('All');
   const [dialogOpen, setDialogOpen] = useState(false);
   
   // Form schema
@@ -139,7 +142,7 @@ const Users = () => {
   
   // Update user role mutation
   const updateUserRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string, role: 'Technician' | 'Manager' | 'Admin' }) => {
+    mutationFn: async ({ userId, role }: { userId: string, role: UserRole }) => {
       const { error } = await supabase
         .from('profiles')
         .update({ role })
@@ -311,7 +314,7 @@ const Users = () => {
             <div className="w-full md:w-48">
               <Select
                 defaultValue={roleFilter}
-                onValueChange={setRoleFilter}
+                onValueChange={(value) => setRoleFilter(value as UserRole | 'All')}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Filter by role" />
@@ -388,7 +391,7 @@ const Users = () => {
                         onValueChange={(value) => 
                           updateUserRole.mutate({ 
                             userId: user.id, 
-                            role: value as 'Technician' | 'Manager' | 'Admin' 
+                            role: value as UserRole 
                           })
                         }
                       >

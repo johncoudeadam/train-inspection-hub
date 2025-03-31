@@ -22,7 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const Reviews = () => {
   const { userRole } = useAuth();
-  const [filter, setFilter] = useState<string>('Submitted');
+  const [filter, setFilter] = useState<ReportStatus | 'All'>('Submitted');
   const [searchTerm, setSearchTerm] = useState('');
   
   const { data: reports, isLoading, error } = useQuery({
@@ -103,7 +103,7 @@ const Reviews = () => {
             <div className="w-full md:w-48">
               <Select
                 defaultValue={filter}
-                onValueChange={setFilter}
+                onValueChange={(value) => setFilter(value as ReportStatus | 'All')}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Filter by status" />
