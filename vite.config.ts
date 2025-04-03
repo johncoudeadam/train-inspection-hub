@@ -5,7 +5,6 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from 'vite-plugin-pwa';
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
@@ -16,8 +15,12 @@ export default defineConfig(({ mode }) => ({
     mode === 'development' && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'generateSW',
+      injectRegister: 'auto',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        navigateFallback: '/index.html',
+        navigateFallbackAllowlist: [/^\/(?!api)/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\.supabase\.co\/.*/i,
@@ -54,7 +57,10 @@ export default defineConfig(({ mode }) => ({
             type: 'image/png',
             purpose: 'any maskable'
           }
-        ]
+        ],
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#ffffff'
       }
     }),
   ].filter(Boolean),
@@ -63,4 +69,5 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  base: '/',
 }));
