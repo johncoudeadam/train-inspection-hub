@@ -2,11 +2,19 @@
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
-import { usePWA } from './hooks/usePWA';
+import { registerSW } from 'virtual:pwa-register'
 
-function Root() {
-  usePWA(); // Register service worker
-  return <App />;
-}
+// Register service worker more directly
+const updateSW = registerSW({
+  onNeedRefresh() {
+    console.log("New version available");
+    if (confirm('New version available. Update now?')) {
+      updateSW();
+    }
+  },
+  onOfflineReady() {
+    console.log("App ready for offline use");
+  },
+})
 
-createRoot(document.getElementById("root")!).render(<Root />);
+createRoot(document.getElementById("root")!).render(<App />);

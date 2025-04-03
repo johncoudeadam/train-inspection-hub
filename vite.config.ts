@@ -14,27 +14,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === 'development' && componentTagger(),
     VitePWA({
-      registerType: 'autoUpdate',
-      strategies: 'generateSW',
+      registerType: 'prompt',  // Changed from autoUpdate to prompt
+      strategies: 'injectManifest', // Changed from generateSW to injectManifest
       injectRegister: 'auto',
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
-        navigateFallback: '/index.html',
-        navigateFallbackAllowlist: [/^\/(?!api)/],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-api-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24, // 24 hours
-              },
-            },
-          },
-        ],
-      },
       manifest: {
         name: 'Train Inspection Hub',
         short_name: 'TrainHub',
@@ -61,6 +43,27 @@ export default defineConfig(({ mode }) => ({
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff'
+      },
+      // Simplified workbox config
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        navigateFallback: 'index.html',
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.supabase\.co\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'supabase-api-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24, // 24 hours
+              },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: true,
       }
     }),
   ].filter(Boolean),
