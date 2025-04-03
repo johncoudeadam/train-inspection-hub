@@ -4,6 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, Report, ReportStatus } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { useOffline } from '@/context/OfflineContext';
+import { 
+  saveReportOffline, 
+  savePhotoOffline 
+} from '@/lib/offlineDb';
 
 interface ReportFormData {
   trainNumber: string;
@@ -16,6 +21,7 @@ export function useReports() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isOnline } = useOffline();
   const [searchParams, setSearchParams] = useState({
     trainNumber: '',
     status: 'all',
@@ -55,21 +61,34 @@ export function useReports() {
       if (error) throw error;
       return data as Report[];
     },
-    enabled: !!user,
+    enabled: !!user && isOnline,
   });
 
-  // Create a new report
+  // Create a new report (with offline support)
   const createReport = useMutation({
     mutationFn: async (formData: ReportFormData) => {
       const newReport = {
+        id: crypto.randomUUID(), // Generate UUID on client side for offline support
         train_number: formData.trainNumber,
         subsystem: formData.subsystem,
         location: formData.location,
         notes: formData.notes || '',
         status: 'Draft' as ReportStatus,
         created_by: user?.id,
+        created_at: new Date().toISOString(),
       };
       
+      if (!isOnline) {
+        // Save locally if offline
+        const id = await saveReportOffline(newReport);
+        toast({
+          title: "Saved offline",
+          description: "Your report has been saved locally and will sync when you're back online.",
+        });
+        return { ...newReport, id } as Report;
+      }
+      
+      // Save to Supabase if online
       const { data, error } = await supabase
         .from('reports')
         .insert([newReport])
@@ -94,9 +113,25 @@ export function useReports() {
     },
   });
 
-  // Submit a report for review
+  // Submit a report for review (with offline support)
   const submitReport = useMutation({
     mutationFn: async (reportId: string) => {
+      if (!isOnline) {
+        // Save locally if offline
+        await saveReportOffline({
+          id: reportId,
+          status: 'Submitted'
+        }, 'update');
+        
+        toast({
+          title: "Saved offline",
+          description: "Your report has been marked for submission and will sync when you're back online.",
+        });
+        
+        return { id: reportId, status: 'Submitted' } as Report;
+      }
+      
+      // Submit to Supabase if online
       const { data, error } = await supabase
         .from('reports')
         .update({ status: 'Submitted' })
@@ -134,6 +169,11 @@ export function useReports() {
       status: ReportStatus, 
       comments?: string 
     }) => {
+      // Only available online (managers need to be online to review)
+      if (!isOnline) {
+        throw new Error("You need to be online to review reports");
+      }
+      
       // Prepare update data
       const updateData: any = { 
         status,
@@ -186,10 +226,28 @@ export function useReports() {
     },
   });
 
-  // Upload photos for a report
+  // Upload photos for a report (with offline support)
   const uploadPhoto = useMutation({
     mutationFn: async ({ reportId, file }: { reportId: string, file: File }) => {
-      // Upload to Storage
+      if (!isOnline) {
+        // Save photo locally if offline
+        await savePhotoOffline(reportId, file);
+        
+        // Update report to indicate it has photos (will be synced later)
+        await saveReportOffline({
+          id: reportId,
+          has_photos: true
+        }, 'update');
+        
+        toast({
+          title: "Photo saved offline",
+          description: "Your photo has been saved locally and will sync when you're back online.",
+        });
+        
+        return { id: crypto.randomUUID(), report_id: reportId };
+      }
+      
+      // Upload to Storage if online
       const fileExt = file.name.split('.').pop();
       const filePath = `${reportId}/${Date.now()}.${fileExt}`;
       
