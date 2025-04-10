@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,7 @@ import {
   SelectValue, 
 } from '@/components/ui/select';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { supabase, UserProjectAccess } from '@/lib/supabase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Table, 
@@ -135,7 +134,6 @@ const Users = () => {
   // Mutation to create a new user
   const createUser = useMutation({
     mutationFn: async (userData: UserFormValues) => {
-      // 1. Create auth user with Supabase
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
@@ -148,7 +146,6 @@ const Users = () => {
       
       if (authError) throw authError;
       
-      // 2. Update the role in the profiles table
       if (authData.user) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -222,24 +219,20 @@ const Users = () => {
       hasAccess: boolean 
     }) => {
       if (hasAccess) {
-        // Grant access
         const { error } = await supabase
           .from('user_project_access')
-          .insert({ 
+          .insert([{
             user_id: userId, 
             project_id: projectId 
-          });
+          }]);
           
         if (error) throw error;
       } else {
-        // Remove access
         const { error } = await supabase
           .from('user_project_access')
           .delete()
-          .match({ 
-            user_id: userId, 
-            project_id: projectId 
-          });
+          .eq('user_id', userId)
+          .eq('project_id', projectId);
           
         if (error) throw error;
       }
