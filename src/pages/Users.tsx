@@ -21,16 +21,37 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Search, FilterX, PlusCircle, UserPlus, User, Mail, ShieldCheck } from 'lucide-react';
+import { 
+  Search, 
+  FilterX, 
+  UserPlus, 
+  User, 
+  Mail, 
+  ShieldCheck,
+  Building,
+  Check,
+  X
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogFooter
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link } from 'react-router-dom';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useProjects } from '@/hooks/useProjects';
 
 type UserRole = 'Technician' | 'Manager' | 'Admin';
 
@@ -41,8 +62,13 @@ const Users = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'All'>('All');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [projectAccessDialogOpen, setProjectAccessDialogOpen] = useState(false);
   
-  // Form schema
+  // Get projects for user access management
+  const { projects, projectsLoading } = useProjects();
+  
+  // Form schema for creating new users
   const userSchema = z.object({
     email: z.string().email({ message: "Please enter a valid email address" }),
     fullName: z.string().min(3, { message: "Full name must be at least 3 characters" }),
@@ -87,6 +113,23 @@ const Users = () => {
       return data;
     },
     enabled: userRole === 'Admin',
+  });
+  
+  // Query to fetch user project access
+  const { data: userProjects, isLoading: userProjectsLoading } = useQuery({
+    queryKey: ['userProjects', selectedUser],
+    queryFn: async () => {
+      if (!selectedUser) return [];
+      
+      const { data, error } = await supabase
+        .from('user_project_access')
+        .select('project_id')
+        .eq('user_id', selectedUser);
+      
+      if (error) throw error;
+      return data.map(item => item.project_id);
+    },
+    enabled: !!selectedUser && projectAccessDialogOpen,
   });
   
   // Mutation to create a new user
@@ -166,6 +209,71 @@ const Users = () => {
       });
     },
   });
+  
+  // Update user project access mutation
+  const updateUserProjectAccess = useMutation({
+    mutationFn: async ({ 
+      userId, 
+      projectId, 
+      hasAccess 
+    }: { 
+      userId: string, 
+      projectId: string, 
+      hasAccess: boolean 
+    }) => {
+      if (hasAccess) {
+        // Grant access
+        const { error } = await supabase
+          .from('user_project_access')
+          .insert({ user_id: userId, project_id: projectId })
+          .select();
+          
+        if (error) throw error;
+      } else {
+        // Remove access
+        const { error } = await supabase
+          .from('user_project_access')
+          .delete()
+          .eq('user_id', userId)
+          .eq('project_id', projectId);
+          
+        if (error) throw error;
+      }
+      
+      return { userId, projectId, hasAccess };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userProjects', selectedUser] });
+      toast({
+        title: "Project access updated",
+        description: "The user's project access has been updated",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update project access",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Handle project access change
+  const handleProjectAccessChange = (projectId: string, checked: boolean) => {
+    if (selectedUser) {
+      updateUserProjectAccess.mutate({
+        userId: selectedUser,
+        projectId,
+        hasAccess: checked
+      });
+    }
+  };
+  
+  // Open project access dialog for a user
+  const openProjectAccessDialog = (userId: string) => {
+    setSelectedUser(userId);
+    setProjectAccessDialogOpen(true);
+  };
   
   if (userRole !== 'Admin') {
     return (
@@ -280,13 +388,69 @@ const Users = () => {
             </Form>
           </DialogContent>
         </Dialog>
+        
+        {/* Project Access Dialog */}
+        <Dialog 
+          open={projectAccessDialogOpen} 
+          onOpenChange={setProjectAccessDialogOpen}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Manage Project Access</DialogTitle>
+              <DialogDescription>
+                Select which projects this user can access
+              </DialogDescription>
+            </DialogHeader>
+            
+            {projectsLoading || userProjectsLoading ? (
+              <div className="py-4 space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ) : projects && projects.length > 0 ? (
+              <div className="space-y-4 py-2">
+                {projects.map((project) => (
+                  <div key={project.id} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={`project-${project.id}`}
+                      checked={userProjects?.includes(project.id)}
+                      onCheckedChange={(checked) => 
+                        handleProjectAccessChange(project.id, checked as boolean)
+                      }
+                    />
+                    <label 
+                      htmlFor={`project-${project.id}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {project.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                No projects found
+              </div>
+            )}
+            
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setProjectAccessDialogOpen(false)}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       
       <Card>
         <CardHeader>
           <CardTitle>Users</CardTitle>
           <CardDescription>
-            Manage users and their roles
+            Manage users, their roles and project access
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -356,6 +520,7 @@ const Users = () => {
                   <TableHead>User</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Projects</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -384,6 +549,17 @@ const Users = () => {
                         <ShieldCheck className="h-3 w-3 mr-1" />
                         {user.role}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openProjectAccessDialog(user.id)}
+                        className="flex items-center gap-1"
+                      >
+                        <Building className="h-3.5 w-3.5" />
+                        Manage Access
+                      </Button>
                     </TableCell>
                     <TableCell>
                       <Select

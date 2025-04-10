@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,6 +15,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useProjects } from '@/hooks/useProjects';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+import { Loader2 } from 'lucide-react';
 
 const projectSchema = z.object({
   name: z.string().min(3, { message: 'Project name must be at least 3 characters' }),
@@ -23,8 +26,36 @@ const projectSchema = z.object({
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
 
-const ProjectForm: React.FC = () => {
-  const { createProject } = useProjects();
+interface ProjectFormProps {
+  projectId?: string;
+  isEditing?: boolean;
+  onSuccess?: () => void;
+}
+
+const ProjectForm: React.FC<ProjectFormProps> = ({ 
+  projectId, 
+  isEditing = false,
+  onSuccess 
+}) => {
+  const { createProject, updateProject } = useProjects();
+  
+  // Fetch project details if editing
+  const { data: projectData, isLoading: projectLoading } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: async () => {
+      if (!projectId) return null;
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+        
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!projectId && isEditing,
+  });
   
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -33,17 +64,49 @@ const ProjectForm: React.FC = () => {
       description: '',
     },
   });
+  
+  // Set form values when editing existing project
+  useEffect(() => {
+    if (projectData && isEditing) {
+      form.reset({
+        name: projectData.name,
+        description: projectData.description || '',
+      });
+    }
+  }, [projectData, form, isEditing]);
 
   function onSubmit(data: ProjectFormValues) {
-    // Ensure name is treated as required for ProjectFormData
-    createProject.mutate({
-      name: data.name,
-      description: data.description || ''
-    }, {
-      onSuccess: () => {
-        form.reset();
-      }
-    });
+    if (isEditing && projectId) {
+      // Update existing project
+      updateProject.mutate({
+        id: projectId,
+        name: data.name,
+        description: data.description || ''
+      }, {
+        onSuccess: () => {
+          if (onSuccess) onSuccess();
+        }
+      });
+    } else {
+      // Create new project
+      createProject.mutate({
+        name: data.name,
+        description: data.description || ''
+      }, {
+        onSuccess: () => {
+          form.reset();
+          if (onSuccess) onSuccess();
+        }
+      });
+    }
+  }
+
+  if (projectLoading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
@@ -81,8 +144,15 @@ const ProjectForm: React.FC = () => {
           )}
         />
         
-        <Button type="submit" className="w-full" disabled={createProject.isPending}>
-          {createProject.isPending ? 'Creating...' : 'Create Project'}
+        <Button 
+          type="submit" 
+          className="w-full" 
+          disabled={createProject.isPending || updateProject?.isPending}
+        >
+          {createProject.isPending || updateProject?.isPending ? 
+            'Saving...' : 
+            isEditing ? 'Update Project' : 'Create Project'
+          }
         </Button>
       </form>
     </Form>

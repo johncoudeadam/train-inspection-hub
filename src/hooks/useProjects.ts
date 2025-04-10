@@ -9,6 +9,10 @@ export interface ProjectFormData {
   description?: string;
 }
 
+export interface ProjectUpdateData extends ProjectFormData {
+  id: string;
+}
+
 export interface SubsystemFormData {
   name: string;
   projectId: string;
@@ -36,7 +40,6 @@ export function useProjects() {
       if (error) throw error;
       return data as Project[];
     },
-    enabled: !!user,
   });
 
   // Fetch subsystems for a project
@@ -109,6 +112,38 @@ export function useProjects() {
       });
     },
   });
+  
+  // Update an existing project
+  const updateProject = useMutation({
+    mutationFn: async (formData: ProjectUpdateData) => {
+      const { data, error } = await supabase
+        .from('projects')
+        .update({
+          name: formData.name,
+          description: formData.description || '',
+        })
+        .eq('id', formData.id)
+        .select();
+        
+      if (error) throw error;
+      return data[0];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project'] });
+      toast({
+        title: "Project updated",
+        description: "The project has been updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update project",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Add a subsystem to a project
   const addSubsystem = useMutation({
@@ -176,6 +211,7 @@ export function useProjects() {
     useSubsystems,
     useLocations,
     createProject,
+    updateProject,
     addSubsystem,
     addLocation,
   };
