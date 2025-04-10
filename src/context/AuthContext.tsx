@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
+type UserRole = 'Technician' | 'Manager' | 'Admin';
+
 interface AuthContextType {
   user: any | null;
   session: any | null;
@@ -11,7 +13,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, userData: any) => Promise<void>;
   signOut: () => Promise<void>;
-  userRole: string | null;
+  userRole: UserRole | null;
+  setUserRole: (role: UserRole) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,7 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<any | null>(null);
   const [session, setSession] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -42,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .single();
             
           if (profileError) throw profileError;
-          setUserRole(profile?.role || null);
+          setUserRole(profile?.role as UserRole || null);
         }
       } catch (error) {
         console.error('Error setting auth data:', error);
@@ -66,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('id', session.user.id)
           .single()
           .then(({ data }) => {
-            setUserRole(data?.role || null);
+            setUserRole(data?.role as UserRole || null);
           });
       } else {
         setUserRole(null);
@@ -153,7 +156,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signIn,
       signUp,
       signOut,
-      userRole
+      userRole,
+      setUserRole
     }}>
       {children}
     </AuthContext.Provider>
