@@ -45,3 +45,10 @@ export interface Project {
   created_at: string;
   created_by: string;
 }
+
+export interface UserProjectAccess {
+  id: string;
+  user_id: string;
+  project_id: string;
+  created_at: string;
+}

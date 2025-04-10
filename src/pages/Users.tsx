@@ -225,8 +225,10 @@ const Users = () => {
         // Grant access
         const { error } = await supabase
           .from('user_project_access')
-          .insert({ user_id: userId, project_id: projectId })
-          .select();
+          .insert({ 
+            user_id: userId, 
+            project_id: projectId 
+          });
           
         if (error) throw error;
       } else {
@@ -234,8 +236,10 @@ const Users = () => {
         const { error } = await supabase
           .from('user_project_access')
           .delete()
-          .eq('user_id', userId)
-          .eq('project_id', projectId);
+          .match({ 
+            user_id: userId, 
+            project_id: projectId 
+          });
           
         if (error) throw error;
       }
