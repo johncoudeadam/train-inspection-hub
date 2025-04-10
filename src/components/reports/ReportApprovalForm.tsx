@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2 } from 'lucide-react';
 
 interface ReportApprovalFormProps {
   reportId: string;
@@ -31,27 +32,33 @@ const ReportApprovalForm: React.FC<ReportApprovalFormProps> = ({ reportId, onClo
     },
   });
   
-  const handleApprove = () => {
-    const comments = form.getValues().comments;
-    updateReportStatus.mutate(
-      { 
-        reportId, 
-        status: 'Approved',
-        comments
-      },
-      {
-        onSuccess: () => {
-          toast({
-            title: "Report approved",
-            description: "The report has been approved successfully",
-          });
-          if (onClose) onClose();
+  const handleApprove = async () => {
+    try {
+      const comments = form.getValues().comments;
+      await updateReportStatus.mutateAsync(
+        { 
+          reportId, 
+          status: 'Approved',
+          comments
         }
-      }
-    );
+      );
+      
+      toast({
+        title: "Report approved",
+        description: "The report has been approved successfully",
+      });
+      
+      if (onClose) onClose();
+    } catch (error: any) {
+      toast({
+        title: "Approval failed",
+        description: error.message || "An error occurred during approval",
+        variant: "destructive"
+      });
+    }
   };
   
-  const handleReject = () => {
+  const handleReject = async () => {
     const comments = form.getValues().comments;
     if (!comments) {
       form.setError('comments', { 
@@ -61,22 +68,28 @@ const ReportApprovalForm: React.FC<ReportApprovalFormProps> = ({ reportId, onClo
       return;
     }
     
-    updateReportStatus.mutate(
-      { 
-        reportId, 
-        status: 'Rejected',
-        comments
-      },
-      {
-        onSuccess: () => {
-          toast({
-            title: "Report rejected",
-            description: "The report has been rejected",
-          });
-          if (onClose) onClose();
+    try {
+      await updateReportStatus.mutateAsync(
+        { 
+          reportId, 
+          status: 'Rejected',
+          comments
         }
-      }
-    );
+      );
+      
+      toast({
+        title: "Report rejected",
+        description: "The report has been rejected",
+      });
+      
+      if (onClose) onClose();
+    } catch (error: any) {
+      toast({
+        title: "Rejection failed",
+        description: error.message || "An error occurred during rejection",
+        variant: "destructive"
+      });
+    }
   };
   
   return (
@@ -114,14 +127,24 @@ const ReportApprovalForm: React.FC<ReportApprovalFormProps> = ({ reportId, onClo
             disabled={updateReportStatus.isPending}
             type="button"
           >
-            Reject
+            {updateReportStatus.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Rejecting...
+              </>
+            ) : "Reject"}
           </Button>
           <Button 
             onClick={handleApprove}
             disabled={updateReportStatus.isPending}
             type="button"
           >
-            Approve
+            {updateReportStatus.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Approving...
+              </>
+            ) : "Approve"}
           </Button>
         </div>
       </form>

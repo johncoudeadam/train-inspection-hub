@@ -13,7 +13,7 @@ interface ReportFormData {
 }
 
 export function useReports() {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useState({
@@ -61,13 +61,15 @@ export function useReports() {
   // Create a new report
   const createReport = useMutation({
     mutationFn: async (formData: ReportFormData) => {
+      if (!user) throw new Error('User not authenticated');
+      
       const newReport = {
         train_number: formData.trainNumber,
         subsystem: formData.subsystem,
         location: formData.location,
         notes: formData.notes || '',
         status: 'Draft' as ReportStatus,
-        created_by: user?.id,
+        created_by: user.id,
       };
       
       const { data, error } = await supabase
@@ -97,9 +99,14 @@ export function useReports() {
   // Submit a report for review
   const submitReport = useMutation({
     mutationFn: async (reportId: string) => {
+      if (!user) throw new Error('User not authenticated');
+      
       const { data, error } = await supabase
         .from('reports')
-        .update({ status: 'Submitted' })
+        .update({ 
+          status: 'Submitted',
+          created_by: user.id // Ensure created_by is set in case it wasn't already
+        })
         .eq('id', reportId)
         .select();
         
@@ -134,10 +141,12 @@ export function useReports() {
       status: ReportStatus, 
       comments?: string 
     }) => {
+      if (!user) throw new Error('User not authenticated');
+      
       // Prepare update data
       const updateData: any = { 
         status,
-        reviewed_by: user?.id 
+        reviewed_by: user.id 
       };
       
       // If there are comments, append them to existing notes
@@ -171,7 +180,7 @@ export function useReports() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: ['report'] });
-      const action = data.status === 'Approved' ? 'approved' : 'rejected';
+      const action = data?.status === 'Approved' ? 'approved' : 'rejected';
       toast({
         title: `Report ${action}`,
         description: `The report has been ${action}`,
@@ -189,6 +198,8 @@ export function useReports() {
   // Upload photos for a report
   const uploadPhoto = useMutation({
     mutationFn: async ({ reportId, file }: { reportId: string, file: File }) => {
+      if (!user) throw new Error('User not authenticated');
+      
       // Upload to Storage
       const fileExt = file.name.split('.').pop();
       const filePath = `${reportId}/${Date.now()}.${fileExt}`;
@@ -236,6 +247,29 @@ export function useReports() {
     },
   });
 
+  // Get a single report by ID
+  const getReportById = async (id: string) => {
+    const { data, error } = await supabase
+      .from('reports')
+      .select('*')
+      .eq('id', id)
+      .single();
+      
+    if (error) throw error;
+    return data as Report;
+  };
+
+  // Get photos for a report
+  const getReportPhotos = async (reportId: string) => {
+    const { data, error } = await supabase
+      .from('photos')
+      .select('*')
+      .eq('report_id', reportId);
+      
+    if (error) throw error;
+    return data;
+  };
+
   return {
     reports,
     isLoading,
@@ -246,5 +280,7 @@ export function useReports() {
     uploadPhoto,
     searchParams,
     setSearchParams,
+    getReportById,
+    getReportPhotos,
   };
 }
