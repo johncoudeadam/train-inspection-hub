@@ -55,8 +55,6 @@ const ProtectedRoute = ({
 };
 
 const AppContent = () => {
-  const { userRole } = useAuth();
-  
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

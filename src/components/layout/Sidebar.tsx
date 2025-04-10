@@ -69,7 +69,6 @@ const Sidebar = ({ userRole = 'Technician', collapsed = false }: SidebarProps) =
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
         <SidebarLink to="/" icon={<Home />} label="Dashboard" hideLabel={collapsed} />
         <SidebarLink to="/reports" icon={<Clipboard />} label="Reports" count={3} hideLabel={collapsed} />
-        <SidebarLink to="/search" icon={<Search />} label="Search" hideLabel={collapsed} />
         <SidebarLink to="/analytics" icon={<BarChart />} label="Analytics" hideLabel={collapsed} />
         
         {(userRole === 'Manager' || userRole === 'Admin') && (
