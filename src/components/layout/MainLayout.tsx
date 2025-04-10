@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { 
   Select,
@@ -15,30 +16,43 @@ import {
 
 const MainLayout = () => {
   const isMobile = useIsMobile();
+  const { userRole, setUserRole } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(isMobile);
-  const [userRole, setUserRole] = useState<'Technician' | 'Manager' | 'Admin'>('Technician');
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
+
+  useEffect(() => {
+    // Set sidebar collapsed state based on mobile detection
+    setSidebarCollapsed(isMobile);
+  }, [isMobile]);
+
+  // Make sure we have a userRole even if it's a fallback
+  const currentRole = userRole || 'Technician';
 
   return (
     <div className="flex h-screen overflow-hidden">
       <div 
         className={`${sidebarCollapsed ? 'w-16' : 'w-64'} flex-shrink-0 transition-all duration-300 ease-in-out`}
       >
-        <Sidebar userRole={userRole} collapsed={sidebarCollapsed} />
+        <Sidebar userRole={currentRole} collapsed={sidebarCollapsed} />
       </div>
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header onMenuToggle={toggleSidebar} userRole={userRole} />
+        <Header onMenuToggle={toggleSidebar} userRole={currentRole} />
         
         {/* Dev controls - will be removed in production */}
         <div className="bg-black/5 p-2 flex items-center space-x-2 border-b">
           <span className="text-xs text-muted-foreground">Demo Controls:</span>
           <Select 
-            defaultValue={userRole} 
-            onValueChange={(value) => setUserRole(value as 'Technician' | 'Manager' | 'Admin')}
+            defaultValue={currentRole}
+            value={currentRole}
+            onValueChange={(value) => {
+              if (setUserRole) {
+                setUserRole(value as 'Technician' | 'Manager' | 'Admin');
+              }
+            }}
           >
             <SelectTrigger className="h-8 w-40">
               <SelectValue placeholder="Select role" />

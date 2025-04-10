@@ -1,20 +1,18 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { 
   Clipboard, 
   BarChart, 
   Settings, 
   Home, 
-  Search,
   FileText, 
   Users,
   Building,
   LogOut,
   CheckSquare
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 
 interface SidebarLinkProps {

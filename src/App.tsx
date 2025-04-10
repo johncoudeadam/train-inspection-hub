@@ -64,6 +64,7 @@ const AppContent = () => {
           <MainLayout />
         </ProtectedRoute>
       }>
+        <Route index element={<Dashboard />} />
         <Route path="/" element={<Dashboard />} />
         
         {/* Reports Routes */}
